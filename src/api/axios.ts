@@ -1,7 +1,7 @@
 import axios from "axios";
 
 const api = axios.create({
-    baseURL: "https://www.kap.org.tr/tr/api/",
+    baseURL: "https://www.kap.org.tr/tr/",
     timeout: 10000
 })
 
