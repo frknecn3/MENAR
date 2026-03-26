@@ -8,7 +8,7 @@ export class AppError extends Error {
     details?: any
 
 
-    constructor(message: string, statusCode: number, data: unknown, details: any) {
+    constructor(message: string, statusCode: number, data?: unknown, details?: any) {
         super(message)
 
         this.statusCode = statusCode,
