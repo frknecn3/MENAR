@@ -13,7 +13,9 @@
   "type": "module",
   "dependencies": {
     "axios": "^1.13.6",
+    "cheerio": "^1.2.0",
     "express": "^5.2.1",
+    "ollama": "^0.6.3",
     "playwright": "^1.58.2"
   },
   "devDependencies": {
