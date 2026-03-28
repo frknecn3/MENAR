@@ -1,0 +1,9 @@
+- [ ] Pull the latest MENAR changes from GitHub and inspect the current branch state
+- [ ] Review the user's recent code edits in the repository
+- [ ] Locate and inspect `bist100_all_times.json` and map it to the SPA data model
+- [ ] Move or recreate the SPA inside the repository `frontend` folder
+- [ ] Adapt the frontend to use `bist100_all_times.json`
+- [ ] Validate the integrated frontend and summarize the repository changes
+- [ ] Stage the MENAR frontend integration changes in `frontend/`
+- [ ] Create a Git commit for the SPA integration with `bist100_all_times.json`
+- [ ] Push the new MENAR frontend commit to GitHub
