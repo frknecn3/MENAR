@@ -1,10 +1,8 @@
-import { Router, type RequestHandler } from "express";
+import { Router } from "express";
+import type { Router as ExpressRouter } from "express";
 import { getStockData } from "../controllers/stocksController";
 
-
-const router = Router();
-
-// router.get("/", getStocks);
+const router: ExpressRouter = Router();
 
 router.get("/:id", getStockData);
 
