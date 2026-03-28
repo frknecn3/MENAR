@@ -8,6 +8,9 @@ const PORT = 3000;
 
 app.use('/api/announcements', announcementsRouter )
 
+app.use('/api/stocks', announcementsRouter )
+
+
 
 app.use(globalErrorHandler)
 
