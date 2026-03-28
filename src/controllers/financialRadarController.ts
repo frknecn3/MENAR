@@ -6,7 +6,7 @@ import { AppError } from "../middlewares/globalErrorHandler";
 
 const runFinancialRadarJob = (pageLimit: number): Promise<unknown> => {
   return new Promise((resolve, reject) => {
-    const pythonProcess = spawn("python3.11", [
+    const pythonProcess = spawn("python3", [
       "./src/python-processes/fetch_financial_radar_bist100.py",
       String(pageLimit),
     ]);

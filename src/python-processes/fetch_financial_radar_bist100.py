@@ -263,48 +263,92 @@ def convert_value(value: str) -> Any:
     return cleaned
 
 
+def is_target_page(page_text: str) -> bool:
+    """
+    Sayfa metninde boşluk, alt satır ve i/ı duyarlılığı olmadan esnek arama yapar.
+    """
+    if not page_text:
+        return False
+    # Türkçe i/ı harflerini standartlaştır, boşlukları ve satır sonlarını tamamen sil
+    normalized = page_text.lower().replace("i̇", "i").replace("ı", "i").replace("\n", "").replace(" ", "")
+    
+    # Hedef: "bist100temelskorları" (Varyasyonları yakalamak için parçalı arıyoruz)
+    return "bist100" in normalized and "temelskor" in normalized
+
+
 def extract_target_page_table(pdf_path: Path) -> dict[str, Any] | None:
     with pdfplumber.open(str(pdf_path)) as pdf:
         for page_index, page in enumerate(pdf.pages, start=1):
             page_text = page.extract_text() or ""
-            if TARGET_HEADER.lower() not in page_text.lower():
+            
+            # 1. Esnek Sayfa Tespiti
+            if not is_target_page(page_text):
                 continue
 
-            tables = page.extract_tables(
+            # 2. Kademeli Tablo Çıkarma Stratejileri
+            # İlk ayar tabloyu bulamazsa (çizgiler silikse vs.) sırayla diğerlerine geçer
+            extraction_strategies = [
                 {
                     "vertical_strategy": "lines",
                     "horizontal_strategy": "lines",
-                    "intersection_tolerance": 5,
-                    "snap_tolerance": 3,
-                }
-            )
-            if not tables:
-                tables = page.extract_tables(
-                    {
-                        "vertical_strategy": "text",
-                        "horizontal_strategy": "text",
-                        "text_x_tolerance": 2,
-                        "text_y_tolerance": 2,
+                    "intersection_tolerance": 15,  # Esneklik artırıldı (Orijinali 5'ti)
+                    "snap_tolerance": 5,
+                },
+                {
+                    "vertical_strategy": "text",
+                    "horizontal_strategy": "text",
+                    "text_x_tolerance": 3,
+                    "text_y_tolerance": 3,
+                },
+                {}  # En son default ayarları dene
+            ]
+
+            for strategy in extraction_strategies:
+                tables = page.extract_tables(strategy)
+                
+                for table in tables:
+                    # Gelen tablonun geçerli bir boyutu var mı?
+                    if not table or len(table) < 2:
+                        continue
+                        
+                    # 3. Hücreleri Temizleme
+                    cleaned_rows = [[clean_space(cell or "") for cell in row] for row in table if any(clean_space(cell or "") for cell in row)]
+                    if not cleaned_rows:
+                        continue
+
+                    # 4. Esnek Başlık Kontrolü (1. ve 2. satırı kontrol et)
+                    header = cleaned_rows[0]
+                    header_text = " ".join(header).lower().replace("i̇", "i").replace("ı", "i")
+                    
+                    # Eğer ilk satırda beklediğimiz kelimeler yoksa...
+                    if "kod" not in header_text and "hisse" not in header_text and "şirket" not in header_text and "sirket" not in header_text:
+                        # Belki başlık 2. satırdadır (PDF kaymaları çok sık yaşanır)
+                        if len(cleaned_rows) > 1:
+                            header_2 = cleaned_rows[1]
+                            header_text_2 = " ".join(header_2).lower().replace("i̇", "i").replace("ı", "i")
+                            if "kod" in header_text_2 or "hisse" in header_text_2:
+                                # İlk çöp satırı at, tabloyu asıl başlıktan başlat
+                                cleaned_rows = cleaned_rows[1:]
+                            else:
+                                continue # 2. satırda da yoksa bu tablo bizim tablomuz değildir
+                        else:
+                            continue
+
+                    # 5. Senin mevcut objeye dönüştürme fonksiyonunu çağır
+                    # Burada cleaned_rows gönderiyoruz ki senin fonksiyonun temizlenmiş diziyi alsın
+                    final_header, records = table_rows_to_objects(cleaned_rows)
+                    
+                    if not final_header or not records:
+                        continue
+                        
+                    return {
+                        "page_number": page_index,
+                        "table_header": final_header,
+                        "records": records,
+                        "raw_text_excerpt": page_text[:2000],
                     }
-                )
-
-            for table in tables:
-                if not table:
-                    continue
-                header, records = table_rows_to_objects(table)
-                if not header or not records:
-                    continue
-                header_text = " ".join(header).lower()
-                if "kod" not in header_text and "hisse" not in header_text:
-                    continue
-                return {
-                    "page_number": page_index,
-                    "table_header": header,
-                    "records": records,
-                    "raw_text_excerpt": page_text[:2000],
-                }
+                    
     return None
-
 
 def save_week_json(report_date: str | None, table_payload: dict[str, Any], source_pdf_url: str, source_page_number: int) -> str:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
