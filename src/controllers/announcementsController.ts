@@ -1,32 +1,75 @@
-import type { RequestHandler } from "express";
-import type { Request, Response } from 'express'
+import type { Request, Response, RequestHandler } from "express";
 import { c } from "../helpers/catchAsync";
 import api from "../api/axios";
 import { AppResponse } from "../helpers/response";
 import { parseKapHtmlToMarkdown } from "../helpers/cleanHTML";
-import { analyzeKapNotification } from "../llm/analystService";
+import {
+    analyzeKapNotification,
+    type KapAnalysis,
+} from "../llm/analystService";
 
-export const getAllAnnouncements: RequestHandler = c(async (req: Request, res: Response) => {
-    console.log("announcements trigger")
-    const response = await api.post('api/disclosure/list/main', {
-        fromDate: "16.03.2026",
-        memberTypes: ["IGS", "DDK"],
-        toDate: "16.03.2026"
-    });
+// Basit in-memory cache (kalıcılık istersen SQLite/Postgres'e taşı)
+const analysisCache = new Map<string, KapAnalysis>();
 
-    console.log("Cevap: ", response.data)
+// KAP'ın beklediği gg.aa.yyyy formatında bugünün tarihi
+const todayKapFormat = (): string => {
+    const d = new Date();
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${pad(d.getDate())}.${pad(d.getMonth() + 1)}.${d.getFullYear()}`;
+};
 
-    return AppResponse(res, 'Duyurular başarıyla getirildi.', response.data)
-})
+export const getAllAnnouncements: RequestHandler = c(
+    async (req: Request, res: Response) => {
+        const fromDate = (req.query.fromDate as string) ?? todayKapFormat();
+        const toDate = (req.query.toDate as string) ?? todayKapFormat();
 
-export const getAnnouncement: RequestHandler = c(async (req: Request, res: Response) => {
-    const response = await api.get(`Bildirim/${req.params.id}`)
+        console.log("announcements trigger", { fromDate, toDate });
 
-    const parsed = parseKapHtmlToMarkdown(response.data)
+        const response = await api.post("api/disclosure/list/main", {
+            fromDate,
+            toDate,
+            memberTypes: ["IGS", "DDK"],
+        });
 
-    console.log(parsed)
-    
-    const analysis = await analyzeKapNotification(parsed);
+        return AppResponse(res, "Duyurular başarıyla getirildi.", response.data);
+    }
+);
 
-    return AppResponse(res, 'Duyuru başarıyla analiz edildi.', analysis)
-})
+export const getAnnouncement: RequestHandler = c(
+    async (req: Request, res: Response) => {
+        let { id } = req.params;
+
+        id = String(id);
+
+        // 1) Önbellek kontrolü — aynı bildirimi tekrar analiz etme
+        const cached = analysisCache.get(id);
+        if (cached) {
+            return AppResponse(res, "Duyuru önbellekten getirildi.", {
+                ...cached,
+                cached: true,
+            });
+        }
+
+        // 2) Bildirimi çek + HTML'i markdown'a çevir
+        const { data } = await api.get(`Bildirim/${id}`);
+
+        console.log("RAW TYPE:", typeof data);
+        console.log("RAW PREVIEW:", JSON.stringify(data).slice(0, 500));
+
+        const parsed = parseKapHtmlToMarkdown(data);
+
+        console.log("PARSED LENGTH:", parsed?.length);
+        console.log("PARSED PREVIEW:", parsed?.slice(0, 300));
+
+        // 3) LLM ile analiz et
+        const analysis = await analyzeKapNotification(parsed);
+
+        // 4) Önbelleğe yaz
+        analysisCache.set(id, analysis);
+
+        return AppResponse(res, "Duyuru başarıyla analiz edildi.", {
+            ...analysis,
+            cached: false,
+        });
+    }
+);

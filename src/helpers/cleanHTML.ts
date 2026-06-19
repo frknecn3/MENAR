@@ -1,94 +1,92 @@
 import * as cheerio from 'cheerio';
-import { AppError } from '../middlewares/globalErrorHandler';
 
-export const parseKapHtmlToMarkdown = (html: string): any => {
-    const $ = cheerio.load(html);
-    let markdown = "# KAP BİLDİRİM ANALİZİ\n\n";
-
-    let focusedElement;
-
-    // Tüm veriyi barındıran ana tabloyu seçiyoruz
-    const mainTable = $('table[class^="tbl_"]').first();
-
-    if (mainTable && mainTable.length > 0) handleTable($,mainTable)
-
-    // tablo yoksa 
+const stripBoilerplate = (text: string): string =>
+  text
+    .replace(/Yukarıdaki açıklamalarımızın[\s\S]*$/, "")     // SPK beyanı
+    .replace(/Kamuoyuna saygıyla duyurulur\.?/g, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 
 
+export const parseKapHtmlToMarkdown = (html: string): string => {
+  const $ = cheerio.load(html);
+  let markdown = "# KAP BİLDİRİM ANALİZİ\n\n";
+
+  // Tüm veriyi barındıran ana tabloyu seçiyoruz
+  const mainTable = $('table[class^="tbl_"]').first();
+
+  if (mainTable && mainTable.length > 0) {
+    markdown += handleTable($, mainTable);   // ✅ dönen değeri ekle
+  } else {
+    // ✅ Ana tablo yoksa: body'deki düz metne düş (boş kalmasın)
+    const fallback = $('body').text().replace(/\s+/g, ' ').trim();
+    markdown += fallback || "_İçerik ayrıştırılamadı._";
+  }
+
+  return stripBoilerplate(markdown.trim());   // ✅ EN ÖNEMLİSİ: return et!
 };
 
+const handleTable = ($: any, table: any): string => {
+  let markdown = '';
+  let currentSection = "Özet Bilgiler";
+  markdown += `## ${currentSection}\n`;
 
-const handleTable = ($: any, table: any) => {
-    let markdown = '';
+  table.find('> tbody > tr').each((_: any, tr: any) => {
+    const $tr = $(tr);
 
-    let currentSection = "Özet Bilgiler";
-    markdown += `## ${currentSection}\n`;
+    // 1. Bölüm Başlıkları (KAP'taki yeşil barlar)
+    const sectionHeader = $tr.find('.bgGreen .txtWhite').text().trim();
+    if (sectionHeader) {
+      currentSection = sectionHeader;
+      markdown += `\n## ${currentSection}\n`;
+      return;
+    }
 
-    // Ana tablonun ana satırlarını (tr) tek tek dönüyoruz
-    table.find('> tbody > tr').each((_: any, tr: Element) => {
-        const $tr = $(tr);
+    const nestedTable = $tr.find('table');
 
-        // 1. Bölüm Başlıklarını Yakalama (KAP'taki yeşil barlar)
-        const sectionHeader = $tr.find('.bgGreen .txtWhite').text().trim();
-        if (sectionHeader) {
-            currentSection = sectionHeader;
-            markdown += `\n## ${currentSection}\n`;
-            return; // Başlığı ekledik, sonraki satıra geç
-        }
+    // 2. İç içe tablolar (verinin %90'ı burada)
+    if (nestedTable.length > 0) {
+      const isGrid = nestedTable.attr('border') === "1";
 
-        const nestedTable = $tr.find('table');
+      if (isGrid) {
+        // Dinamik Markdown tablosu
+        let isFirstRow = true;
+        nestedTable.find('tr').each((_: any, innerTr: any) => {
+          const cells = $(innerTr).find('td, th');
+          const rowData = cells
+            .map((i: number, el: any) => $(el).text().trim().replace(/\s+/g, ' '))
+            .get();
 
-        // 2. İç İçe Tabloları İşleme (Verilerin %90'ı buradadır)
-        if (nestedTable.length > 0) {
-            // KAP'ta grid tablolar (İtfa planı gibi) genelde border="1" ile gelir
-            const isGrid = nestedTable.attr('border') === "1";
-
-            if (isGrid) {
-                // Dinamik Markdown Tablosu Oluşturucu
-                let isFirstRow = true;
-                nestedTable.find('tr').each((_: any, innerTr: HTMLElement) => {
-                    const cells = $(innerTr).find('td, th');
-
-                    // Hücre içindeki enter (\n) karakterlerini boşlukla değiştiriyoruz ki MD tablosu kırılmasın
-                    const rowData = cells.map((i: number, el: HTMLElement) => $(el).text().trim().replace(/\s+/g, ' ')).get();
-
-                    // Sadece içi boş olmayan satırları ekle
-                    if (rowData.join('').trim() !== '') {
-                        markdown += `| ${rowData.join(' | ')} |\n`;
-
-                        // Başlığın hemen altına Markdown ayraçlarını (---|---) ekle
-                        if (isFirstRow) {
-                            markdown += `|${rowData.map(() => '---').join('|')}|\n`;
-                            isFirstRow = false;
-                        }
-                    }
-                });
-                markdown += "\n";
-            } else {
-                // 2 Kolonlu Key-Value Tablosu (Örn: Para Birimi: TRY)
-                nestedTable.find('tr').each((_: any, innerTr: HTMLElement) => {
-                    const cells = $(innerTr).find('td');
-                    if (cells.length === 2) {
-                        const key = $(cells[0]).text().trim().replace(/:$/, ''); // Sonda iki nokta varsa temizle
-                        const value = $(cells[1]).text().trim();
-
-                        // Boş, anlamsız veya "--" gibi verileri modele gönderip kalabalık yapma
-                        if (key && value && value !== "--" && value !== "-") {
-                            markdown += `- **${key}:** ${value}\n`;
-                        }
-                    }
-                });
+          if (rowData.join('').trim() !== '') {
+            markdown += `| ${rowData.join(' | ')} |\n`;
+            if (isFirstRow) {
+              markdown += `|${rowData.map(() => '---').join('|')}|\n`;
+              isFirstRow = false;
             }
-        } else {
-            // 3. Tablosuz Düz Metin İşleme (Örn: Ek Açıklamalar altındaki upuzun yazılar)
-            const textContent = $tr.find('.gwt-HTML').text().trim();
-            // Çok kısa metinleri ("Evet", "Hayır" vb.) atlayıp sadece uzun açıklamaları al
-            if (textContent && textContent.length > 20) {
-                markdown += `${textContent}\n\n`;
+          }
+        });
+        markdown += "\n";
+      } else {
+        // 2 kolonlu Key-Value tablosu
+        nestedTable.find('tr').each((_: any, innerTr: any) => {
+          const cells = $(innerTr).find('td');
+          if (cells.length === 2) {
+            const key = $(cells[0]).text().trim().replace(/:$/, '');
+            const value = $(cells[1]).text().trim();
+            if (key && value && value !== "--" && value !== "-") {
+              markdown += `- **${key}:** ${value}\n`;
             }
-        }
-    });
+          }
+        });
+      }
+    } else {
+      // 3. Tablosuz düz metin (Ek Açıklamalar gibi)
+      const textContent = $tr.find('.gwt-HTML').text().trim();
+      if (textContent && textContent.length > 20) {
+        markdown += `${textContent}\n\n`;
+      }
+    }
+  });
 
-
-    return markdown;
-}
+  return markdown;   // ✅ handleTable zaten return ediyordu, artık yakalanıyor
+};
