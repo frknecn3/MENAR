@@ -1,0 +1,1 @@
+export const cleanStr = (str: string) => str ? str.toLowerCase().replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g, "").trim() : "";
