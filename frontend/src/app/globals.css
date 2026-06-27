@@ -21,3 +21,16 @@ body {
   background: var(--background);
   color: var(--foreground);
 }
+
+.paper {
+  background-color: #fdfcf7;
+  background-image:
+    /* hafif sararma/vignette */
+    radial-gradient(120% 120% at 50% 0%, rgba(0,0,0,0) 60%, rgba(120,90,40,0.06) 100%),
+    /* kağıt greni (SVG noise) */
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+  box-shadow:
+    0 1px 1px rgba(0,0,0,0.04),
+    0 12px 30px rgba(0,0,0,0.22),
+    0 24px 60px rgba(0,0,0,0.12);
+}
