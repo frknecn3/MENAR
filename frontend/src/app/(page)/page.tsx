@@ -1,15 +1,12 @@
-import React from 'react'
+
 import BackgroundImage from './BackgroundImage'
+import Hero from './Hero'
 
 const Home = () => {
+
   return (
-    <div className='flex mx-[20vw] mt-[20vh]'>
-      <div className='flex flex-col text-6xl font-bold'>
-        Katılım Bankacılığı'nda
-        <span className='text-3xl text-neutral-300 pt-4 font-light italic'>kişisel yol göstericiniz.</span>
-      </div>
-      <div className='flex-1'>
-      </div>
+    <div className='flex max-lg:flex-col text-center md:text-left  max-md:mx-[5vw] max-lg:mx-[10vw] mx-[15vw]'>
+      <Hero />
     </div>
   )
 }
