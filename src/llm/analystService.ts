@@ -3,11 +3,11 @@ import { z } from "zod";
 
 const MODEL = "gemma3:4b";
 
-// Tek kaynaktan şema (hem doğrulama hem tip)
+// tek kaynaktan şema (hem doğrulama hem tip)
 export const AnalysisSchema = z.object({
     score: z.number().int().min(1).max(10),
     trend: z.enum(["YÜKSELİŞ", "DÜŞÜŞ", "NÖTR"]),
-    key_facts: z.array(z.string()).min(1),     // ✅ somut veriler
+    key_facts: z.array(z.string()).min(1),
     short_analysis: z.string().min(1),
     long_analysis: z.string().min(1),
 }).refine(
@@ -19,7 +19,7 @@ export const AnalysisSchema = z.object({
 );
 export type KapAnalysis = z.infer<typeof AnalysisSchema>;
 
-// Ollama'nın modeli zorlaması için JSON Schema
+// ollama'nın modeli zorlaması için JSON Schema
 const responseFormat = {
     type: "object",
     properties: {
